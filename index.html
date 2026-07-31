@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signify Wealth — Notice Filing Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #fff;
+    border-bottom: 3px solid #c0392b;
+    padding: 18px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header img { height: 36px; }
+  header .tool-label {
+    font-size: 12px; font-weight: 600; color: #999;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  main { max-width: 860px; margin: 40px auto; padding: 0 24px; }
+
+  .page-title {
+    margin-bottom: 28px;
+  }
+  .page-title h2 {
+    font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px;
+  }
+  .page-title p { font-size: 14px; color: #888; }
+
+  .config-box {
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-top: 3px solid #c0392b;
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .config-box h2 { font-size: 11px; font-weight: 700; color: #c0392b; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
+  .config-row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .config-item { flex: 1; min-width: 200px; }
+  .config-item label { display: block; font-size: 11px; font-weight: 600; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .config-item input {
+    width: 100%; padding: 9px 12px;
+    border: 1px solid #ddd; border-radius: 3px;
+    font-size: 14px; color: #1a1a1a;
+    outline: none; background: #fafafa;
+  }
+  .config-item input:focus { border-color: #c0392b; background: white; box-shadow: 0 0 0 3px rgba(192,57,43,0.08); }
+  .config-item small { display: block; margin-top: 5px; font-size: 11px; color: #aaa; }
+
+  .upload-zone {
+    background: white;
+    border: 2px dashed #ddd;
+    border-radius: 4px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: #c0392b;
+    background: #fdf8f8;
+  }
+  .upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon { font-size: 36px; margin-bottom: 12px; }
+  .upload-zone h3 { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 6px; }
+  .upload-zone p { font-size: 13px; color: #888; }
+  .file-selected { margin-top: 12px; font-size: 13px; font-weight: 600; color: #c0392b; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 28px;
+    background: #c0392b; color: white;
+    border: none; border-radius: 3px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: background 0.2s;
+    width: 100%; justify-content: center;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .btn:hover { background: #a93226; }
+  .btn:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-download { background: #1a1a1a; margin-top: 16px; }
+  .btn-download:hover { background: #333; }
+
+  .results { display: none; margin-top: 32px; }
+
+  .summary-cards { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .card {
+    flex: 1; min-width: 140px;
+    background: white; border: 1px solid #e5e5e5;
+    border-radius: 4px; padding: 20px;
+    text-align: center;
+  }
+  .card .num { font-size: 34px; font-weight: 700; color: #1a1a1a; }
+  .card .label { font-size: 11px; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card.alert .num { color: #c0392b; }
+  .card.warn .num { color: #e67e22; }
+
+  .section-title {
+    font-size: 11px; font-weight: 700; color: #888;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 12px; margin-top: 24px;
+  }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    background: white; border-radius: 4px;
+    overflow: hidden; border: 1px solid #e5e5e5;
+    margin-bottom: 20px;
+  }
+  th {
+    background: #1a1a1a; color: white;
+    padding: 11px 16px; text-align: left;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  td { padding: 10px 16px; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .flag-yes { background: #c0392b; color: white; padding: 3px 10px; border-radius: 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .flag-no { color: #aaa; font-size: 13px; }
+  .flag-mandatory { background: #1a1a1a; color: white; padding: 3px 10px; border-radius: 2px; font-size: 11px; font-weight: 700; }
+
+  .manual-review {
+    background: #fffbeb; border: 1px solid #f6d860;
+    border-left: 4px solid #e67e22;
+    border-radius: 4px; padding: 20px; margin-bottom: 20px;
+  }
+  .manual-review h3 { font-size: 11px; font-weight: 700; color: #a04000; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.8px; }
+  .manual-review ul { list-style: none; }
+  .manual-review li { font-size: 13px; padding: 6px 0; border-bottom: 1px solid #fef3c7; color: #7d3c00; }
+  .manual-review li:last-child { border-bottom: none; }
+  .manual-review strong { color: #a04000; }
+
+  .spinner { display: none; text-align: center; padding: 32px; }
+  .spinner-ring {
+    width: 36px; height: 36px;
+    border: 3px solid #e5e5e5;
+    border-top-color: #c0392b;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer {
+    text-align: center; padding: 32px;
+    font-size: 11px; color: #bbb;
+    border-top: 1px solid #e5e5e5;
+    margin-top: 48px;
+  }
+
+  .flag-registered { background: #27ae60; color: white; padding: 3px 10px; border-radius: 2px; font-size: 11px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="https://images.squarespace-cdn.com/content/v1/60b7be9ffc5e3600df6938fa/afef52de-ccb2-4318-9379-71c4233579dc/SignifyLogoTransparent%3ABlack.png" alt="Signify Wealth" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block'">
+  <div id="fallback-logo" style="display:none; font-weight:800; font-size:18px; color:#1a1a1a; letter-spacing:-0.5px;">SIGNIFY WEALTH</div>
+  <div class="tool-label">Notice Filing Tool</div>
+</header>
+
+<main>
+
+  <div class="page-title">
+    <h2>Notice Filing Report</h2>
+    <p>Quarterly state registration compliance — all data processed locally on this device</p>
+  </div>
+
+  <!-- Config -->
+  <div class="config-box">
+    <h2>Configuration</h2>
+    <div class="config-row">
+      <div class="config-item">
+        <label>Quarter Label</label>
+        <input type="text" id="quarterLabel" placeholder="e.g. Q2 2026">
+        <small>Used in the output file name and report header</small>
+      </div>
+      <div class="config-item">
+        <label>Registration Threshold</label>
+        <input type="number" id="threshold" value="5" min="1">
+        <small>Client count that triggers state registration requirement</small>
+      </div>
+      <div class="config-item">
+        <label>Mandatory States (comma-separated)</label>
+        <input type="text" id="mandatoryStates" value="LA, TX, NH, NE">
+        <small>States requiring registration even with 1 client (SEC-registered firms)</small>
+      </div>
+      <div class="config-item">
+        <label>Already Registered In (comma-separated)</label>
+        <input type="text" id="registeredStates" value="CA, FL, GA, LA, MO, SC, TN, TX">
+        <small>States where Signify is already registered — won't show as Action Required</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div class="upload-icon">📂</div>
+    <h3>Drop the Schwab Address Report here</h3>
+    <p>or click to browse — Excel files only (.xlsx)</p>
+    <div class="file-selected" id="fileName"></div>
+  </div>
+
+  <button class="btn" id="processBtn" disabled onclick="processFile()">
+    Run Notice Filing Report
+  </button>
+
+  <!-- Spinner -->
+  <div class="spinner" id="spinner">
+    <div class="spinner-ring"></div>
+    <p style="font-size:14px; color:#64748b;">Processing Schwab data...</p>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <div class="summary-cards">
+      <div class="card">
+        <div class="num" id="totalClients">—</div>
+        <div class="label">Total Clients</div>
+      </div>
+      <div class="card">
+        <div class="num" id="totalStates">—</div>
+        <div class="label">States</div>
+      </div>
+      <div class="card alert">
+        <div class="num" id="actionStates">—</div>
+        <div class="label">Action Required</div>
+      </div>
+      <div class="card warn">
+        <div class="num" id="reviewCount">—</div>
+        <div class="label">Manual Review</div>
+      </div>
+    </div>
+
+    <div id="manualReviewSection" style="display:none;">
+      <div class="manual-review">
+        <h3>⚠ Manual Review Required — Check Wealthbox</h3>
+        <ul id="reviewList"></ul>
+      </div>
+    </div>
+
+    <div class="section-title">Notice Filing Chart — State Counts</div>
+    <table>
+      <thead>
+        <tr>
+          <th>State</th>
+          <th>Client Count</th>
+          <th>Registration Required?</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="chartTable"></tbody>
+    </table>
+
+    <div class="section-title">Client Data (cleaned)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Account Name</th>
+          <th>State</th>
+        </tr>
+      </thead>
+      <tbody id="dataTable"></tbody>
+    </table>
+
+    <button class="btn btn-download" onclick="downloadExcel()">
+      Download Notice Filing Excel
+    </button>
+
+  </div>
+</main>
+
+<footer>Signify Wealth &mdash; Internal Compliance Tool &mdash; All data processed locally, nothing leaves this device</footer>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────
+const EXCLUDE_CODES   = new Set(["LLC", "DASCG", "IMMAS"]);
+const CUSTODIAL_CODES = new Set(["CU", "CH"]);
+const JOINT_CODES     = new Set(["DBJT", "JT", "TC"]);
+
+// Hardcoded mandatory states — SEC-registered RIAs must file regardless of client count
+const MANDATORY_STATES_HARDCODED = new Set(["LA", "TX", "NH", "NE"]);
+
+// ─── STATE ───────────────────────────────────────────────────────────────
+let cleanedData  = [];
+let stateCounts  = {};
+let flaggedItems = [];
+let selectedFile = null;
+
+// ─── UI SETUP ────────────────────────────────────────────────────────────
+// Set default quarter label
+(function() {
+  const now = new Date();
+  const q = Math.ceil((now.getMonth() + 1) / 3);
+  document.getElementById('quarterLabel').value = `Q${q} ${now.getFullYear()}`;
+})();
+
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+const processBtn = document.getElementById('processBtn');
+
+fileInput.addEventListener('change', function() {
+  if (this.files[0]) selectFile(this.files[0]);
+});
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+});
+
+function selectFile(file) {
+  selectedFile = file;
+  document.getElementById('fileName').textContent = '✓  ' + file.name;
+  processBtn.disabled = false;
+}
+
+// ─── PARSE ───────────────────────────────────────────────────────────────
+function parseRawRows(data) {
+  // Auto-detect the header row by scanning for "Account Name" column.
+  // Works regardless of whether the file has a preamble (old format) or not (new format).
+  let headerRowIdx = -1;
+  let cols = {};
+
+  for (let i = 0; i < Math.min(20, data.length); i++) {
+    const row = data[i];
+    if (!row) continue;
+    const found = row.findIndex(v => v && v.toString().trim().toLowerCase() === 'account name');
+    if (found !== -1) {
+      headerRowIdx = i;
+      for (let j = 0; j < row.length; j++) {
+        const h = (row[j] || '').toString().trim().toLowerCase();
+        if (h === 'account name')               cols.account_name = j;
+        if (h === 'account registration code')  cols.reg_code = j;
+        if (h === 'customer first middle name') cols.first = j;
+        if (h === 'customer last org name')     cols.last = j;
+        if (h === 'address type')               cols.addr_type = j;
+        if (h === 'state')                      cols.state = j;
+      }
+      break;
+    }
+  }
+
+  if (headerRowIdx === -1) {
+    throw new Error('Could not find the header row. Make sure this is the Schwab address report (should have an "Account Name" column).');
+  }
+
+  const missing = [];
+  if (cols.account_name === undefined) missing.push('Account Name');
+  if (cols.reg_code === undefined)     missing.push('Account Registration Code');
+  if (cols.state === undefined)        missing.push('State');
+  if (missing.length > 0) {
+    throw new Error(`Missing required columns: ${missing.join(', ')}`);
+  }
+
+  const rows = [];
+  for (let i = headerRowIdx + 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row || row.every(v => v == null || v === '')) continue;
+    rows.push({
+      account_name: (row[cols.account_name] != null ? row[cols.account_name] : '').toString().trim(),
+      reg_code:     (row[cols.reg_code]     != null ? row[cols.reg_code]     : '').toString().trim().toUpperCase(),
+      first_name:   (cols.first    !== undefined && row[cols.first]    != null ? row[cols.first]    : '').toString().trim(),
+      last_name:    (cols.last     !== undefined && row[cols.last]     != null ? row[cols.last]     : '').toString().trim(),
+      addr_type:    (cols.addr_type !== undefined && row[cols.addr_type] != null ? row[cols.addr_type] : '').toString().trim(),
+      state:        (row[cols.state] != null ? row[cols.state] : '').toString().trim().toUpperCase(),
+    });
+  }
+  return rows;
+}
+
+// ─── CLEAN ───────────────────────────────────────────────────────────────
+function cleanData(rows) {
+  const flags = [];
+
+  // Drop hard excludes
+  rows = rows.filter(r => !EXCLUDE_CODES.has(r.reg_code));
+
+  // ── Step 1: Build a set of account names that have non-custodial accounts
+  // This lets us identify true NIL clients (custodial-only)
+  const regularAccountNames = new Set();
+  for (const r of rows) {
+    if (!CUSTODIAL_CODES.has(r.reg_code) && !JOINT_CODES.has(r.reg_code)) {
+      regularAccountNames.add(r.account_name.trim().toUpperCase());
+    }
+  }
+
+  // ── Step 2: Group NON-custodial rows by client (first|last name)
+  const byClient = {};
+  for (const r of rows) {
+    if (CUSTODIAL_CODES.has(r.reg_code)) continue; // handle custodials separately below
+    const key = `${r.first_name}|${r.last_name}`;
+    if (!byClient[key]) byClient[key] = [];
+    byClient[key].push(r);
+  }
+
+  // ── Step 3: Handle custodial accounts
+  // Custodial rows use the beneficiary's name in first/last columns, not the account holder.
+  // We group them by their ACCOUNT NAME (e.g. "ABRA WEEKS CUST FOR").
+  // If the parent account holder ("ABRA WEEKS") has regular accounts → skip this custodial.
+  // If not → it's a NIL client, include the parent account holder name.
+  const custodialByAcct = {};
+  for (const r of rows) {
+    if (!CUSTODIAL_CODES.has(r.reg_code)) continue;
+    const acct = r.account_name.trim().toUpperCase();
+    if (!custodialByAcct[acct]) custodialByAcct[acct] = [];
+    custodialByAcct[acct].push(r);
+  }
+
+  for (const [acctName, custRows] of Object.entries(custodialByAcct)) {
+    // Strip " CUST FOR" to get parent name
+    const parentName = acctName.replace(/\s+CUST\s+FOR.*$/i, '').trim();
+    // If parent has regular accounts, skip — they're already included
+    if (regularAccountNames.has(parentName)) continue;
+    // NIL client — include under parent account name (strip CUST FOR)
+    const cleanParentName = acctName.replace(/\s+CUST\s+FOR.*$/i, '').trim();
+    const states = [...new Set(custRows.map(r => r.state).filter(Boolean))];
+    if (states.length === 0) {
+      flags.push({ client: cleanParentName, issue: 'No state found — manual review needed' });
+      continue;
+    }
+    const nilKey = `__NIL__|${parentName}`;
+    if (!byClient[nilKey]) {
+      byClient[nilKey] = custRows.map(r => ({ ...r, account_name: cleanParentName }));
+    }
+  }
+
+  // ── Step 4: Process each client
+  const cleaned = [];
+
+  for (const [key, clientRows] of Object.entries(byClient)) {
+    const isNil = key.startsWith('__NIL__|');
+    const [first, last] = isNil ? ['', key.replace('__NIL__|', '')] : key.split('|');
+    const displayName = isNil ? last : `${first} ${last}`.trim();
+
+    const jointRows   = clientRows.filter(r => JOINT_CODES.has(r.reg_code));
+    const regularRows = clientRows.filter(r => !JOINT_CODES.has(r.reg_code));
+
+    let workingRows;
+    if (regularRows.length > 0) {
+      workingRows = regularRows;
+    } else if (jointRows.length > 0) {
+      workingRows = jointRows; // joint is only account type
+    } else {
+      workingRows = clientRows;
+    }
+
+    // Prefer Registration address type; fall back to any available
+    const regRows = workingRows.filter(r => r.addr_type.toLowerCase() === 'registration');
+    const stateSource = regRows.length > 0 ? regRows : workingRows;
+    const states = [...new Set(stateSource.map(r => r.state).filter(Boolean))];
+
+    if (states.length === 0) {
+      flags.push({ client: displayName, issue: 'No state found — manual review needed' });
+      continue;
+    }
+
+    let state;
+    if (states.length > 1) {
+      flags.push({
+        client: displayName,
+        issue: `Multiple states: ${states.sort().join(', ')} — check primary tax address in Wealthbox`
+      });
+      state = states.sort()[0];
+    } else {
+      state = states[0];
+    }
+
+    const accountName = workingRows[0].account_name || displayName;
+    cleaned.push({ account_name: accountName, state });
+  }
+
+  cleaned.sort((a, b) => a.account_name.localeCompare(b.account_name));
+  return { cleaned, flags };
+}
+
+// ─── STATE COUNTS ────────────────────────────────────────────────────────
+function buildStateCounts(cleaned) {
+  const counts = {};
+  for (const row of cleaned) {
+    if (row.state) counts[row.state] = (counts[row.state] || 0) + 1;
+  }
+  return Object.fromEntries(Object.entries(counts).sort());
+}
+
+// ─── PROCESS ─────────────────────────────────────────────────────────────
+function processFile() {
+  if (!selectedFile) return;
+
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+  processBtn.disabled = true;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const workbook = XLSX.read(e.target.result, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      const rawRows = parseRawRows(data);
+      const { cleaned, flags } = cleanData(rawRows);
+      const counts = buildStateCounts(cleaned);
+
+      cleanedData  = cleaned;
+      stateCounts  = counts;
+      flaggedItems = flags;
+
+      renderResults(cleaned, counts, flags);
+    } catch(err) {
+      alert('Error processing file: ' + err.message + '\n\nMake sure you selected the correct Schwab address report.');
+      console.error(err);
+    }
+    document.getElementById('spinner').style.display = 'none';
+    processBtn.disabled = false;
+  };
+  reader.readAsArrayBuffer(selectedFile);
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────
+function renderResults(cleaned, counts, flags) {
+  const threshold        = parseInt(document.getElementById('threshold').value) || 5;
+  const mandatoryStates  = new Set([...MANDATORY_STATES_HARDCODED, ...getConfigStates('mandatoryStates')]);
+  const registeredStates = getConfigStates('registeredStates');
+
+  // Action required = hits threshold or mandatory AND not already registered
+  const actionStates = Object.entries(counts).filter(([s, c]) =>
+    (c >= threshold || mandatoryStates.has(s)) && !registeredStates.has(s)
+  );
+
+  document.getElementById('totalClients').textContent = cleaned.length;
+  document.getElementById('totalStates').textContent  = Object.keys(counts).length;
+  document.getElementById('actionStates').textContent = actionStates.length;
+  document.getElementById('reviewCount').textContent  = flags.length;
+
+  // Manual review
+  const reviewSection = document.getElementById('manualReviewSection');
+  const reviewList    = document.getElementById('reviewList');
+  if (flags.length > 0) {
+    reviewList.innerHTML = flags.map(f =>
+      `<li><strong>${f.client}</strong> — ${f.issue}</li>`
+    ).join('');
+    reviewSection.style.display = 'block';
+  } else {
+    reviewSection.style.display = 'none';
+  }
+
+  // Chart table
+  const chartTable = document.getElementById('chartTable');
+  chartTable.innerHTML = Object.entries(counts).map(([state, count]) => {
+    const isMandatory   = mandatoryStates.has(state);
+    const isRegistered  = registeredStates.has(state);
+    const meetsThreshold = count >= threshold || isMandatory;
+    const needsNewFiling = meetsThreshold && !isRegistered;
+
+    let flagHtml, note;
+    if (isRegistered && meetsThreshold) {
+      flagHtml = `<span class="flag-registered">Already Registered</span>`;
+      note = isMandatory ? 'Mandatory — registered ✓' : `${count} clients — registered ✓`;
+    } else if (isRegistered) {
+      flagHtml = `<span class="flag-registered">Registered</span>`;
+      note = 'Below threshold — registered ✓';
+    } else if (isMandatory) {
+      flagHtml = `<span class="flag-mandatory">ACTION — Mandatory State</span>`;
+      note = 'Must register at 1+ client';
+    } else if (needsNewFiling) {
+      flagHtml = `<span class="flag-yes">ACTION REQUIRED</span>`;
+      note = `${count} clients meets threshold`;
+    } else {
+      flagHtml = `<span class="flag-no">No</span>`;
+      note = '';
+    }
+
+    return `<tr><td><strong>${state}</strong></td><td>${count}</td><td>${flagHtml}</td><td style="font-size:12px;color:#64748b;">${note}</td></tr>`;
+  }).join('');
+
+  // Data table
+  const dataTable = document.getElementById('dataTable');
+  dataTable.innerHTML = cleaned.map(r =>
+    `<tr><td>${r.account_name}</td><td>${r.state}</td></tr>`
+  ).join('');
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────
+function getConfigStates(fieldId) {
+  return new Set(
+    document.getElementById(fieldId).value
+      .split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+  );
+}
+
+// ─── DOWNLOAD EXCEL ──────────────────────────────────────────────────────
+function downloadExcel() {
+  const threshold       = parseInt(document.getElementById('threshold').value) || 5;
+  const mandatoryStates = new Set([...MANDATORY_STATES_HARDCODED, ...getConfigStates('mandatoryStates')]);
+  const registeredStates = getConfigStates('registeredStates');
+  const quarterLabel    = document.getElementById('quarterLabel').value || 'Q? 20??';
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Notice Filing Chart
+  const chartRows = [['Row Labels', 'Count of Account Name', 'Status']];
+  for (const [state, count] of Object.entries(stateCounts)) {
+    const isRegistered  = registeredStates.has(state);
+    const isMandatory   = mandatoryStates.has(state);
+    const needsNewFiling = (count >= threshold || isMandatory) && !isRegistered;
+    const status = isRegistered
+      ? (count >= threshold || isMandatory ? 'Already Registered' : 'Registered')
+      : needsNewFiling ? 'ACTION REQUIRED' : 'No Action';
+    chartRows.push([state, count, status]);
+  }
+  chartRows.push(['Grand Total', cleanedData.length, '']);
+  if (flaggedItems.length > 0) {
+    chartRows.push(['', '', '']);
+    chartRows.push(['Manual Review Required', '', '']);
+    for (const f of flaggedItems) chartRows.push([f.client, f.issue, '']);
+  }
+  const wsChart = XLSX.utils.aoa_to_sheet(chartRows);
+  wsChart['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 20 }];
+  wsChart['!autofilter'] = { ref: 'A1:C1' };
+  XLSX.utils.book_append_sheet(wb, wsChart, 'Notice Filing Chart');
+
+  // Sheet 2: Data
+  const dataRows = [['Account Name', 'State']];
+  for (const row of cleanedData) dataRows.push([row.account_name, row.state]);
+  const wsData = XLSX.utils.aoa_to_sheet(dataRows);
+  wsData['!cols'] = [{ wch: 42 }, { wch: 10 }];
+  wsData['!autofilter'] = { ref: `A1:B${cleanedData.length + 1}` };
+  XLSX.utils.book_append_sheet(wb, wsData, 'Data');
+
+  XLSX.writeFile(wb, `Signify - Notice Filing Data Review - ${quarterLabel}.xlsx`);
+}
+</script>
+</body>
+</html>
