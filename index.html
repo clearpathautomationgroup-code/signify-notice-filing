@@ -166,6 +166,34 @@
   }
 
   .flag-registered { background: #27ae60; color: white; padding: 3px 10px; border-radius: 2px; font-size: 11px; font-weight: 700; }
+
+  .btn-box { background: #0061D5; margin-top: 16px; }
+  .btn-box:hover { background: #0052b3; }
+  .btn-local {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; padding: 10px 28px; margin-top: 10px;
+    background: white; color: #555;
+    border: 1px solid #ddd; border-radius: 3px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-local:hover { background: #f5f5f5; }
+
+  .toast {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%);
+    padding: 13px 24px; border-radius: 4px;
+    font-size: 14px; font-weight: 600;
+    z-index: 9999; white-space: nowrap;
+    animation: fadeUp 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  .toast-success { background: #1a1a1a; color: white; }
+  .toast-warn    { background: #e67e22; color: white; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
 </style>
 </head>
 <body>
@@ -282,8 +310,11 @@
       <tbody id="dataTable"></tbody>
     </table>
 
-    <button class="btn btn-download" onclick="downloadExcel()">
-      Download Notice Filing Excel
+    <button class="btn btn-box" id="saveBoxBtn" onclick="saveToBox()">
+      Save to Box
+    </button>
+    <button class="btn-local" onclick="downloadExcel()">
+      Download locally instead
     </button>
 
   </div>
@@ -292,6 +323,21 @@
 <footer>Signify Wealth &mdash; Internal Compliance Tool &mdash; All data processed locally, nothing leaves this device</footer>
 
 <script>
+// ─── BOX CONFIG ───────────────────────────────────────────────────────────
+const BOX_CLIENT_ID   = 'aicxn1n4r03lbfhd1day5jq2hp76a2js';
+const BOX_REDIRECT_URI = 'https://clearpathautomationgroup-code.github.io/signify-notice-filing/';
+const BOX_FOLDER_ID   = '383127035140';
+
+// ─── BOX OAUTH CALLBACK — runs if this page is the OAuth redirect ─────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code && window.opener) {
+    window.opener.postMessage({ type: 'box-auth-code', code }, 'https://clearpathautomationgroup-code.github.io');
+    window.close();
+  }
+})();
+
 // ─── CONFIG ──────────────────────────────────────────────────────────────
 const EXCLUDE_CODES   = new Set(["LLC", "DASCG", "IMMAS"]);
 const CUSTODIAL_CODES = new Set(["CU", "CH"]);
@@ -614,20 +660,22 @@ function getConfigStates(fieldId) {
   );
 }
 
-// ─── DOWNLOAD EXCEL ──────────────────────────────────────────────────────
-function downloadExcel() {
-  const threshold       = parseInt(document.getElementById('threshold').value) || 5;
-  const mandatoryStates = new Set([...MANDATORY_STATES_HARDCODED, ...getConfigStates('mandatoryStates')]);
-  const registeredStates = getConfigStates('registeredStates');
-  const quarterLabel    = document.getElementById('quarterLabel').value || 'Q? 20??';
+function getFilename() {
+  const q = document.getElementById('quarterLabel').value || 'Q? 20??';
+  return `Signify - Notice Filing Data Review - ${q}.xlsx`;
+}
 
+function buildWorkbook() {
+  const threshold        = parseInt(document.getElementById('threshold').value) || 5;
+  const mandatoryStates  = new Set([...MANDATORY_STATES_HARDCODED, ...getConfigStates('mandatoryStates')]);
+  const registeredStates = getConfigStates('registeredStates');
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Notice Filing Chart
   const chartRows = [['Row Labels', 'Count of Account Name', 'Status']];
   for (const [state, count] of Object.entries(stateCounts)) {
-    const isRegistered  = registeredStates.has(state);
-    const isMandatory   = mandatoryStates.has(state);
+    const isRegistered   = registeredStates.has(state);
+    const isMandatory    = mandatoryStates.has(state);
     const needsNewFiling = (count >= threshold || isMandatory) && !isRegistered;
     const status = isRegistered
       ? (count >= threshold || isMandatory ? 'Already Registered' : 'Registered')
@@ -653,7 +701,152 @@ function downloadExcel() {
   wsData['!autofilter'] = { ref: `A1:B${cleanedData.length + 1}` };
   XLSX.utils.book_append_sheet(wb, wsData, 'Data');
 
-  XLSX.writeFile(wb, `Signify - Notice Filing Data Review - ${quarterLabel}.xlsx`);
+  return wb;
+}
+
+// ─── DOWNLOAD (local fallback) ────────────────────────────────────────────
+function downloadExcel() {
+  XLSX.writeFile(buildWorkbook(), getFilename());
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────
+function showToast(msg, type = 'success', duration = 4000) {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); }, duration);
+}
+
+// ─── PKCE HELPERS ────────────────────────────────────────────────────────
+function generateVerifier() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generateChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+// ─── BOX AUTH ────────────────────────────────────────────────────────────
+async function getBoxToken() {
+  // Return cached token if still valid
+  const cached = sessionStorage.getItem('box_token');
+  const expiry  = sessionStorage.getItem('box_token_expiry');
+  if (cached && expiry && Date.now() < parseInt(expiry)) return cached;
+
+  // Start PKCE flow
+  const verifier   = generateVerifier();
+  const challenge  = await generateChallenge(verifier);
+  sessionStorage.setItem('pkce_verifier', verifier);
+
+  const authUrl = 'https://account.box.com/api/oauth2/authorize?' + new URLSearchParams({
+    client_id: BOX_CLIENT_ID,
+    redirect_uri: BOX_REDIRECT_URI,
+    response_type: 'code',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+  });
+
+  const popup = window.open(authUrl, 'box-auth', 'width=560,height=680,left=200,top=80');
+
+  const code = await new Promise((resolve, reject) => {
+    function onMsg(e) {
+      if (e.origin !== 'https://clearpathautomationgroup-code.github.io') return;
+      if (e.data?.type === 'box-auth-code') {
+        window.removeEventListener('message', onMsg);
+        clearInterval(closedCheck);
+        resolve(e.data.code);
+      }
+    }
+    window.addEventListener('message', onMsg);
+    const closedCheck = setInterval(() => {
+      if (popup.closed) { clearInterval(closedCheck); window.removeEventListener('message', onMsg); reject(new Error('AbortError')); }
+    }, 500);
+  });
+
+  // Exchange code for token
+  const res = await fetch('https://api.box.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: BOX_CLIENT_ID,
+      code,
+      code_verifier: sessionStorage.getItem('pkce_verifier'),
+      redirect_uri: BOX_REDIRECT_URI,
+    }),
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('Token exchange failed: ' + JSON.stringify(data));
+
+  // Cache for 55 min
+  sessionStorage.setItem('box_token', data.access_token);
+  sessionStorage.setItem('box_token_expiry', Date.now() + 55 * 60 * 1000);
+  return data.access_token;
+}
+
+// ─── BOX UPLOAD ──────────────────────────────────────────────────────────
+async function uploadToBox(token, filename, blob) {
+  const attrs = JSON.stringify({ name: filename, parent: { id: BOX_FOLDER_ID } });
+  const form  = new FormData();
+  form.append('attributes', attrs);
+  form.append('file', blob, filename);
+
+  let res = await fetch('https://upload.box.com/api/2.0/files/content', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+
+  // File already exists — overwrite it
+  if (res.status === 409) {
+    const err  = await res.json();
+    const fileId = err?.context_info?.conflicts?.[0]?.id;
+    if (fileId) {
+      const form2 = new FormData();
+      form2.append('attributes', JSON.stringify({ name: filename }));
+      form2.append('file', blob, filename);
+      res = await fetch(`https://upload.box.com/api/2.0/files/${fileId}/content`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form2,
+      });
+    }
+  }
+
+  if (!res.ok) throw new Error('Upload failed: ' + res.status);
+}
+
+// ─── SAVE TO BOX ─────────────────────────────────────────────────────────
+async function saveToBox() {
+  const btn = document.getElementById('saveBoxBtn');
+  btn.disabled = true;
+  btn.textContent = 'Connecting to Box…';
+  try {
+    const token    = await getBoxToken();
+    btn.textContent = 'Uploading…';
+    const wbout    = XLSX.write(buildWorkbook(), { bookType: 'xlsx', type: 'array' });
+    const blob     = new Blob([wbout], { type: 'application/octet-stream' });
+    const filename = getFilename();
+    await uploadToBox(token, filename, blob);
+    showToast(`Saved to Box: ${filename}`, 'success');
+  } catch (err) {
+    if (err.message === 'AbortError') { /* user closed popup */ }
+    else {
+      console.error(err);
+      // Clear cached token in case it's stale
+      sessionStorage.removeItem('box_token');
+      sessionStorage.removeItem('box_token_expiry');
+      downloadExcel();
+      showToast('Box upload failed — downloaded locally instead.', 'warn');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save to Box';
+  }
 }
 </script>
 </body>
